@@ -64,7 +64,7 @@ app.get("/", async (req, res) => {
   res.json({
     frames: [
       {
-        text: `📍 ${city}`
+        text: `📍 ${city} - ${country}`
       },
       {
         text: `🕌 ${next.name}`
