@@ -72,34 +72,34 @@ app.get("/", async (req, res) => {
   // 🟢 MODE NORMAL
   if (mode === "NORMAL") {
     frames = [
-      { text: `📍 ${city}` },
-      { text: `🕌 ${next.name}` },
-      { text: `⏳ dans ${next.minutes} min` }
+      { text: `${city}` },
+      { text: `${next.name}` },
+      { text: `dans ${next.minutes} min` }
     ];
   }
 
   // 🟡 MODE PROCHE
   else if (mode === "SOON") {
     frames = [
-      { text: `🕌 ${next.name} bientôt` },
-      { text: `⏳ ${next.minutes} min` },
-      { text: `📍 ${city}` }
+      { text: `${next.name} bientôt` },
+      { text: `${next.minutes} min` },
+      { text: `${city}` }
     ];
   }
 
   // 🔴 MODE URGENT
   else if (mode === "URGENT") {
     frames = [
-      { text: `🔔 ${next.name} proche` },
-      { text: `⏳ ${next.minutes} min` }
+      { text: `${next.name} proche` },
+      { text: `${next.minutes} min` }
     ];
   }
 
   // ⚫ MODE NOW
   else {
     frames = [
-      { text: `🕌 ${next.name} maintenant` },
-      { text: `🙏 Pray Time` }
+      { text: `${next.name} maintenant` },
+      { text: `Pray Time` }
     ];
   }
 
