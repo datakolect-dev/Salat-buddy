@@ -17,39 +17,44 @@ function getNextPrayer(timings) {
   for (let p of prayers) {
     const [h, m] = p.time.split(":");
 
-    const prayerTime = new Date();
-    prayerTime.setHours(h);
-    prayerTime.setMinutes(m);
-    prayerTime.setSeconds(0);
+    const t = new Date();
+    t.setHours(h);
+    t.setMinutes(m);
+    t.setSeconds(0);
 
-    if (prayerTime > now) {
-      const diffMin = Math.floor((prayerTime - now) / 60000);
-
+    if (t > now) {
+      const diff = Math.floor((t - now) / 60000);
       return {
         name: p.name,
-        minutes: diffMin
+        minutes: diff
       };
     }
   }
 
-  // si toutes les prières sont passées → demain Fajr
+  // si tout est passé → demain Fajr
   const [h, m] = timings.Fajr.split(":");
-  const prayerTime = new Date();
-  prayerTime.setDate(prayerTime.getDate() + 1);
-  prayerTime.setHours(h);
-  prayerTime.setMinutes(m);
+  const t = new Date();
+  t.setDate(t.getDate() + 1);
+  t.setHours(h);
+  t.setMinutes(m);
 
-  const diffMin = Math.floor((prayerTime - now) / 60000);
+  const diff = Math.floor((t - now) / 60000);
 
   return {
     name: "Fajr",
-    minutes: diffMin
+    minutes: diff
   };
+}
+
+function getSmartMode(next) {
+  if (next.minutes <= 0) return "NOW";
+  if (next.minutes <= 10) return "URGENT";
+  if (next.minutes <= 60) return "SOON";
+  return "NORMAL";
 }
 
 app.get("/", async (req, res) => {
 
-  // 📍 récupération de la ville depuis LaMetric
   const city = req.query.city || "Tunis";
   const country = req.query.country || "Tunisia";
 
@@ -60,25 +65,50 @@ app.get("/", async (req, res) => {
   const timings = response.data.data.timings;
 
   const next = getNextPrayer(timings);
+  const mode = getSmartMode(next);
 
-  res.json({
-    frames: [
-      {
-        text: `📍 ${city} - ${country}`
-      },
-      {
-        text: `🕌 ${next.name}`
-      },
-      {
-        text: `⏳ dans ${next.minutes} min`
-      }
-    ]
-  });
+  let frames = [];
+
+  // 🟢 MODE NORMAL
+  if (mode === "NORMAL") {
+    frames = [
+      { text: `📍 ${city}` },
+      { text: `🕌 ${next.name}` },
+      { text: `⏳ dans ${next.minutes} min` }
+    ];
+  }
+
+  // 🟡 MODE PROCHE
+  else if (mode === "SOON") {
+    frames = [
+      { text: `🕌 ${next.name} bientôt` },
+      { text: `⏳ ${next.minutes} min` },
+      { text: `📍 ${city}` }
+    ];
+  }
+
+  // 🔴 MODE URGENT
+  else if (mode === "URGENT") {
+    frames = [
+      { text: `🔔 ${next.name} proche` },
+      { text: `⏳ ${next.minutes} min` }
+    ];
+  }
+
+  // ⚫ MODE NOW
+  else {
+    frames = [
+      { text: `🕌 ${next.name} maintenant` },
+      { text: `🙏 Pray Time` }
+    ];
+  }
+
+  res.json({ frames });
 
 });
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Serveur démarré sur port " + PORT);
+  console.log("Smart Prayer App running on port " + PORT);
 });
