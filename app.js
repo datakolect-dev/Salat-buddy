@@ -48,8 +48,13 @@ function getNextPrayer(timings) {
 }
 
 app.get("/", async (req, res) => {
+
+  // 📍 récupération de la ville depuis LaMetric
+  const city = req.query.city || "Tunis";
+  const country = req.query.country || "Tunisia";
+
   const response = await axios.get(
-    "https://api.aladhan.com/v1/timingsByCity?city=Tunis&country=Tunisia"
+    `https://api.aladhan.com/v1/timingsByCity?city=${city}&country=${country}`
   );
 
   const timings = response.data.data.timings;
@@ -59,6 +64,9 @@ app.get("/", async (req, res) => {
   res.json({
     frames: [
       {
+        text: `📍 ${city}`
+      },
+      {
         text: `🕌 ${next.name}`
       },
       {
@@ -66,6 +74,7 @@ app.get("/", async (req, res) => {
       }
     ]
   });
+
 });
 
 const PORT = process.env.PORT || 3000;
