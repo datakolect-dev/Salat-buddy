@@ -4,9 +4,9 @@ const axios = require("axios");
 const app = express();
 
 /* =========================
-   TIMEZONE TUNIS
+   TIME TUNIS
 ========================= */
-function getTunisNow() {
+function getNowTunis() {
   return new Date(
     new Date().toLocaleString("en-US", {
       timeZone: "Africa/Tunis"
@@ -15,11 +15,11 @@ function getTunisNow() {
 }
 
 /* =========================
-   NEXT PRAYER
+   NEXT PRAYER CALC
 ========================= */
 function getNextPrayer(timings) {
 
-  const now = getTunisNow();
+  const now = getNowTunis();
 
   const prayers = [
     { name: "Fajr", time: timings.Fajr },
@@ -29,15 +29,14 @@ function getNextPrayer(timings) {
     { name: "Isha", time: timings.Isha }
   ];
 
-  for (const p of prayers) {
+  for (let p of prayers) {
 
     const [h, m] = p.time.split(":");
 
-    const t = getTunisNow();
+    const t = getNowTunis();
     t.setHours(parseInt(h));
     t.setMinutes(parseInt(m));
     t.setSeconds(0);
-    t.setMilliseconds(0);
 
     if (t > now) {
       return {
@@ -48,10 +47,10 @@ function getNextPrayer(timings) {
     }
   }
 
-  // demain Fajr
+  // next day Fajr
   const [h, m] = timings.Fajr.split(":");
 
-  const t = getTunisNow();
+  const t = getNowTunis();
   t.setDate(t.getDate() + 1);
   t.setHours(parseInt(h));
   t.setMinutes(parseInt(m));
@@ -64,74 +63,30 @@ function getNextPrayer(timings) {
 }
 
 /* =========================
-   RAMADAN MODE SIMPLE
-========================= */
-function isRamadan() {
-  const month = new Date().getMonth() + 1;
-  return month === 3 || month === 4; // approx
-}
-
-function getRamadanEvent(timings) {
-
-  const now = getTunisNow();
-
-  const suhoor = timings.Imsak;
-  const iftar = timings.Maghrib;
-
-  const [h1, m1] = suhoor.split(":");
-  const [h2, m2] = iftar.split(":");
-
-  let suhoorTime = getTunisNow();
-  suhoorTime.setHours(parseInt(h1), parseInt(m1), 0);
-
-  let iftarTime = getTunisNow();
-  iftarTime.setHours(parseInt(h2), parseInt(m2), 0);
-
-  if (now < suhoorTime) {
-    return {
-      name: "Suhoor",
-      time: suhoor,
-      minutes: Math.floor((suhoorTime - now) / 60000)
-    };
-  }
-
-  return {
-    name: "Iftar",
-    time: iftar,
-    minutes: Math.floor((iftarTime - now) / 60000)
-  };
-}
-
-/* =========================
-   MAIN ROUTE
+   ROUTE
 ========================= */
 app.get("/", async (req, res) => {
 
   try {
 
+    // 📍 LaMetric settings (city selection)
     const city = req.query.city || "Tunis";
     const country = req.query.country || "Tunisia";
 
+    // 🌐 API
     const response = await axios.get(
       `https://api.aladhan.com/v1/timingsByCity?city=${city}&country=${country}`
     );
 
     const timings = response.data.data.timings;
-
-    let next;
-
-    if (isRamadan()) {
-      next = getRamadanEvent(timings);
-    } else {
-      next = getNextPrayer(timings);
-    }
+    const next = getNextPrayer(timings);
 
     let frames = [];
     let priority = "normal";
     let sound = undefined;
 
     /* =========================
-       🔴 URGENT MODE
+       🔴 URGENT MODE (PRAYER NOW)
     ========================= */
     if (next.minutes <= 0) {
 
@@ -139,9 +94,9 @@ app.get("/", async (req, res) => {
       sound = "notification";
 
       frames = [
-        { icon: "i521", text: `${next.name} NOW` },
-        { icon: "i495", text: "Prayer Time" },
-        { icon: "i338", text: city }
+        { icon: "28895", text: next.name + " NOW" },
+        { icon: "1609", text: "Prayer Time" },
+        { icon: "27335", text: city }
       ];
     }
 
@@ -153,9 +108,9 @@ app.get("/", async (req, res) => {
       priority = "warning";
 
       frames = [
-        { icon: "i497", text: `${next.name} soon` },
-        { icon: "i302", text: `${next.minutes} min` },
-        { icon: "i346", text: next.time }
+        { icon: "28895", text: next.name + " soon" },
+        { icon: "42893", text: next.minutes + " min" },
+        { icon: "1609", text: next.time }
       ];
     }
 
@@ -165,13 +120,14 @@ app.get("/", async (req, res) => {
     else {
 
       frames = [
-        { icon: "i338", text: city },
-        { icon: "i495", text: next.name },
-        { icon: "i346", text: next.time },
-        { icon: "i302", text: `${next.minutes} min` }
+        { icon: "27335", text: city },
+        { icon: "28895", text: next.name },
+        { icon: "1609", text: next.time },
+        { icon: "42893", text: next.minutes + " min" }
       ];
     }
 
+    // 📤 RESPONSE LAMETRIC
     res.json({
       frames,
       priority,
@@ -192,7 +148,7 @@ app.get("/", async (req, res) => {
 });
 
 /* =========================
-   START SERVER
+   SERVER
 ========================= */
 const PORT = process.env.PORT || 3000;
 
