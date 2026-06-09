@@ -74,8 +74,17 @@ app.get("/", async (req, res) => {
 
   try {
 
-    const city = req.query.city || "Tunis";
-    const country = req.query.country || "Tunisia";
+    const city = req.query.city;
+    const country = req.query.country;
+      // 🔴 sécurité si utilisateur ne configure rien
+  if (!city || !country) {
+    return res.json({
+      frames: [
+        { text: "Configure App" },
+        { text: "Set City/Country" }
+      ]
+    });
+  }
 
     const response = await axios.get(
       `https://api.aladhan.com/v1/timingsByCity?city=${city}&country=${country}`
@@ -88,18 +97,24 @@ app.get("/", async (req, res) => {
     res.json({
       frames: [
         {
+          icon: "i338",
           text: city
         },
         {
+          icon: "i495",
           text: next.name
         },
         {
+          icon: "i346",
           text: next.time
         },
         {
+          icon: "i302",
           text: `${next.minutes} min`
         }
       ]
+      priority: next.minutes <= 0 ? "critical" : "normal",
+      sound: next.minutes <= 0 ? "notification" : undefined
     });
 
   } catch (error) {
