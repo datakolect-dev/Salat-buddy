@@ -3,7 +3,10 @@ const axios = require("axios");
 
 const app = express();
 
-function getTunisTime() {
+/* =========================
+   TIMEZONE TUNIS
+========================= */
+function getTunisNow() {
   return new Date(
     new Date().toLocaleString("en-US", {
       timeZone: "Africa/Tunis"
@@ -11,9 +14,12 @@ function getTunisTime() {
   );
 }
 
+/* =========================
+   NEXT PRAYER
+========================= */
 function getNextPrayer(timings) {
 
-  const now = getTunisTime();
+  const now = getTunisNow();
 
   const prayers = [
     { name: "Fajr", time: timings.Fajr },
@@ -23,68 +29,88 @@ function getNextPrayer(timings) {
     { name: "Isha", time: timings.Isha }
   ];
 
-  for (const prayer of prayers) {
+  for (const p of prayers) {
 
-    const [h, m] = prayer.time.split(":");
+    const [h, m] = p.time.split(":");
 
-    const prayerTime = getTunisTime();
+    const t = getTunisNow();
+    t.setHours(parseInt(h));
+    t.setMinutes(parseInt(m));
+    t.setSeconds(0);
+    t.setMilliseconds(0);
 
-    prayerTime.setHours(parseInt(h));
-    prayerTime.setMinutes(parseInt(m));
-    prayerTime.setSeconds(0);
-    prayerTime.setMilliseconds(0);
-
-    if (prayerTime > now) {
-
-      const diffMinutes = Math.floor(
-        (prayerTime - now) / 60000
-      );
-
+    if (t > now) {
       return {
-        name: prayer.name,
-        time: prayer.time,
-        minutes: diffMinutes
+        name: p.name,
+        time: p.time,
+        minutes: Math.floor((t - now) / 60000)
       };
     }
   }
 
-  // Toutes les prières du jour sont passées
+  // demain Fajr
   const [h, m] = timings.Fajr.split(":");
 
-  const tomorrowFajr = getTunisTime();
-
-  tomorrowFajr.setDate(tomorrowFajr.getDate() + 1);
-  tomorrowFajr.setHours(parseInt(h));
-  tomorrowFajr.setMinutes(parseInt(m));
-  tomorrowFajr.setSeconds(0);
-  tomorrowFajr.setMilliseconds(0);
-
-  const diffMinutes = Math.floor(
-    (tomorrowFajr - now) / 60000
-  );
+  const t = getTunisNow();
+  t.setDate(t.getDate() + 1);
+  t.setHours(parseInt(h));
+  t.setMinutes(parseInt(m));
 
   return {
     name: "Fajr",
     time: timings.Fajr,
-    minutes: diffMinutes
+    minutes: Math.floor((t - now) / 60000)
   };
 }
 
+/* =========================
+   RAMADAN MODE SIMPLE
+========================= */
+function isRamadan() {
+  const month = new Date().getMonth() + 1;
+  return month === 3 || month === 4; // approx
+}
+
+function getRamadanEvent(timings) {
+
+  const now = getTunisNow();
+
+  const suhoor = timings.Imsak;
+  const iftar = timings.Maghrib;
+
+  const [h1, m1] = suhoor.split(":");
+  const [h2, m2] = iftar.split(":");
+
+  let suhoorTime = getTunisNow();
+  suhoorTime.setHours(parseInt(h1), parseInt(m1), 0);
+
+  let iftarTime = getTunisNow();
+  iftarTime.setHours(parseInt(h2), parseInt(m2), 0);
+
+  if (now < suhoorTime) {
+    return {
+      name: "Suhoor",
+      time: suhoor,
+      minutes: Math.floor((suhoorTime - now) / 60000)
+    };
+  }
+
+  return {
+    name: "Iftar",
+    time: iftar,
+    minutes: Math.floor((iftarTime - now) / 60000)
+  };
+}
+
+/* =========================
+   MAIN ROUTE
+========================= */
 app.get("/", async (req, res) => {
 
   try {
 
-    const city = req.query.city;
-    const country = req.query.country;
-      // 🔴 sécurité si utilisateur ne configure rien
-  if (!city || !country) {
-    return res.json({
-      frames: [
-        { text: "Configure App" },
-        { text: "Set City/Country" }
-      ]
-    });
-  }
+    const city = req.query.city || "Tunis";
+    const country = req.query.country || "Tunisia";
 
     const response = await axios.get(
       `https://api.aladhan.com/v1/timingsByCity?city=${city}&country=${country}`
@@ -92,46 +118,84 @@ app.get("/", async (req, res) => {
 
     const timings = response.data.data.timings;
 
-    const next = getNextPrayer(timings);
+    let next;
+
+    if (isRamadan()) {
+      next = getRamadanEvent(timings);
+    } else {
+      next = getNextPrayer(timings);
+    }
+
+    let frames = [];
+    let priority = "normal";
+    let sound = undefined;
+
+    /* =========================
+       🔴 URGENT MODE
+    ========================= */
+    if (next.minutes <= 0) {
+
+      priority = "critical";
+      sound = "notification";
+
+      frames = [
+        { icon: "i521", text: `${next.name} NOW` },
+        { icon: "i495", text: "Prayer Time" },
+        { icon: "i338", text: city }
+      ];
+    }
+
+    /* =========================
+       🟡 SOON MODE
+    ========================= */
+    else if (next.minutes <= 10) {
+
+      priority = "warning";
+
+      frames = [
+        { icon: "i497", text: `${next.name} soon` },
+        { icon: "i302", text: `${next.minutes} min` },
+        { icon: "i346", text: next.time }
+      ];
+    }
+
+    /* =========================
+       🟢 NORMAL MODE
+    ========================= */
+    else {
+
+      frames = [
+        { icon: "i338", text: city },
+        { icon: "i495", text: next.name },
+        { icon: "i346", text: next.time },
+        { icon: "i302", text: `${next.minutes} min` }
+      ];
+    }
 
     res.json({
-      frames: [
-        {
-          icon: "i338",
-          text: city
-        },
-        {
-          icon: "i495",
-          text: next.name
-        },
-        {
-          icon: "i346",
-          text: next.time
-        },
-        {
-          icon: "i302",
-          text: `${next.minutes} min`
-        }
-      ]
-      priority: next.minutes <= 0 ? "critical" : "normal",
-      sound: next.minutes <= 0 ? "notification" : undefined
+      frames,
+      priority,
+      sound
     });
 
-  } catch (error) {
+  } catch (err) {
 
     res.json({
       frames: [
-        {
-          text: "Prayer Error"
-        }
+        { icon: "i521", text: "Error" },
+        { icon: "i495", text: "Prayer App" }
       ]
     });
 
   }
+
 });
 
+/* =========================
+   START SERVER
+========================= */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`Smart Prayer App running on port ${PORT}`);
+  console.log("🕌 Salat Buddy running on port " + PORT);
 });
